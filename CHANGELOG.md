@@ -3,6 +3,9 @@
 
 ## [Unreleased]
 
+### Fixed
+- WebUI sidebar now reconciles orphaned imported-CLI sessions. When a CLI/agent session is opened in the WebUI it gets a WebUI-owned sidecar so it can render and reopen; previously, if the user then deleted that session from the CLI / local Hermes storage, nothing pruned the sidecar and the stale row lingered in the sidebar indefinitely (there is no WebUI delete affordance for CLI rows). The sidebar list now drops a CLI-imported row whose backing agent `state.db` row is genuinely gone and self-heals `_index.json`. The check probes `state.db` directly via a new `agent_session_row_exists()` (exact, uncapped) rather than the recent-session window from `get_cli_sessions()` (capped at 20), so a still-existing session that merely fell out of the window is never pruned; WebUI-native sessions that only have a CLI ancestor are also never pruned; and any probe error degrades to "keep the row" so a transient failure can't cause data loss (closes #3238).
+
 ## [v0.51.212] — 2026-06-02 — Release GF (stage-batch2 — i18n regenerate-title strings + self-restart argv + todos cold-load)
 
 ### Fixed

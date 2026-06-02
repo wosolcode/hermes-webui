@@ -2820,6 +2820,7 @@ from api.models import (
     _is_empty_partial_activity_message,
     _hide_from_default_sidebar,
     prune_session_from_index,
+    agent_session_row_exists,
     ensure_cron_project,
     is_cron_session,
     is_safe_session_id,
@@ -4868,6 +4869,37 @@ def handle_get(handler, parsed) -> bool:
                 cli = get_cli_sessions()
                 diag.stage("merge_cli_sessions")
                 cli_by_id = {s["session_id"]: s for s in cli}
+                # #3238: reconcile orphaned imported-CLI sidecars. When a CLI
+                # session was clicked in WebUI it gets a WebUI-owned sidecar that
+                # all_sessions() returns independently of state.db. If the user
+                # later deletes the backing CLI session from the command line,
+                # the sidecar is never pruned and the stale row lingers in the
+                # sidebar forever (there is no WebUI delete affordance for it).
+                # Drop rows whose backing agent row is genuinely gone. We probe
+                # state.db directly (agent_session_row_exists) rather than trust
+                # cli_by_id absence, because get_cli_sessions() caps at
+                # CLI_VISIBLE_SESSION_LIMIT (20) — an existing session can fall
+                # out of that window and look deleted. Native WebUI sessions
+                # (source == "webui") that merely have a CLI ancestor are never
+                # pruned.
+                _kept_after_orphan_prune = []
+                for s in webui_sessions:
+                    _sid = s.get("session_id")
+                    if (
+                        _sid
+                        and is_cli_session_row(s)
+                        and not _session_source_is_webui(s)
+                        and _sid not in cli_by_id
+                        and not agent_session_row_exists(_sid, profile=s.get("profile"))
+                    ):
+                        try:
+                            prune_session_from_index(_sid)
+                        except Exception:
+                            logger.debug("Failed to prune orphaned CLI sidecar %s", _sid, exc_info=True)
+                        diag.stage("prune_orphaned_cli_sidecar")
+                        continue
+                    _kept_after_orphan_prune.append(s)
+                webui_sessions = _kept_after_orphan_prune
                 for s in webui_sessions:
                     meta = cli_by_id.get(s.get("session_id"))
                     if not meta:
