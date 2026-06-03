@@ -272,3 +272,31 @@ class TestDidYouMeanToastAssembly:
         # The en template must accept and interpolate an argument.
         assert "model_did_you_mean: (m) =>" in i18n
         assert "${m}" in i18n[i18n.index("model_did_you_mean: (m) =>"):i18n.index("model_did_you_mean: (m) =>") + 120]
+
+
+class TestSlashQualifiedVersionedNoSnap:
+    """#3368 review (Codex CORE): a versioned slash-qualified query whose only near
+    catalog entry is a rejected tier variant (e.g. 'xiaomi/mimo-v2.5' when only
+    'xiaomi/mimo-v2.5-pro' exists) must NOT take the cross-provider direct-update
+    fallback and silently persist the invalid model — it must fall through to the
+    no-match/'did you mean?' toast. The cross-provider direct update is gated on
+    `!versionedNoSnap` so genuinely-off-catalog providers (no near variant) still work."""
+
+    @pytest.fixture(scope="class")
+    def commands_src(self):
+        import pathlib
+        root = pathlib.Path(__file__).resolve().parents[1]
+        return (root / "static" / "commands.js").read_text(encoding="utf-8")
+
+    def test_cross_provider_direct_update_gated_on_versioned_no_snap(self, commands_src):
+        # The guard variable is computed from the version check + a near suggestion.
+        assert "_looksLikeVersionedModel(bare)" in commands_src
+        assert "versionedNoSnap" in commands_src
+        # The direct-update branch must include the !versionedNoSnap gate.
+        idx = commands_src.find("Cross-provider fallback")
+        assert idx != -1, "cross-provider fallback comment not found"
+        window = commands_src[idx:idx + 400]
+        assert "!versionedNoSnap" in window, (
+            "the /api/session/update cross-provider fallback must be gated on "
+            "!versionedNoSnap so a versioned tier-variant near-miss doesn't silently persist"
+        )

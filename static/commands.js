@@ -412,9 +412,16 @@ async function cmdModel(args){
   if(!match && q.includes('/')){
     const bare=q.slice(q.lastIndexOf('/')+1);
     match=_bestModelMatch(sel.options,bare);
+    // #3368: a versioned slash-qualified query whose only near catalog entry is a
+    // rejected tier variant (e.g. "xiaomi/mimo-v2.5" when only "xiaomi/mimo-v2.5-pro"
+    // exists) must NOT silently direct-update to the invalid name — fall through to
+    // the no-match/"did you mean?" toast instead. The cross-provider direct-update
+    // path below is only for genuinely off-catalog providers with no near variant.
+    const nearSuggestion=_nearestModelSuggestion(sel.options,q)||_nearestModelSuggestion(sel.options,bare);
+    const versionedNoSnap=_looksLikeVersionedModel(bare)&&nearSuggestion;
     // Cross-provider fallback: if still no match, the model is from a
     // different provider not in the dropdown. Call /api/session/update directly.
-    if(!match && S&&S.session&&S.session.session_id){
+    if(!match && !versionedNoSnap && S&&S.session&&S.session.session_id){
       const provider=q.slice(0,q.indexOf('/'));
       try{
         const resp=await fetch('/api/session/update',{
