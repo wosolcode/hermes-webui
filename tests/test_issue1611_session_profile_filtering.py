@@ -266,10 +266,35 @@ def test_get_session_rejects_session_from_inactive_profile():
          patch("api.routes.get_state_db_session_messages", return_value=[]), \
          patch("api.routes.bad", side_effect=fake_bad), \
          patch("api.routes.j", side_effect=fake_j):
-        routes.handle_get(SimpleNamespace(), parsed)
+        routes.handle_get(SimpleNamespace(headers={"Cookie": "hermes_profile=default"}), parsed)
 
     assert captured.get("bad", {}).get("status") == 404
     assert "json" not in captured, "foreign-profile transcript must not be returned"
+
+
+def test_get_session_rejects_metadata_only_session_from_inactive_profile():
+    """Metadata-only loads must not bypass the active-profile boundary."""
+    import api.routes as routes
+
+    captured = {}
+
+    def fake_bad(_handler, message, status=400, **_kwargs):
+        captured["bad"] = {"message": message, "status": status}
+        return captured["bad"]
+
+    def fake_j(_handler, data, status=200, **_kwargs):
+        captured["json"] = {"data": data, "status": status}
+        return captured["json"]
+
+    parsed = urlparse("/api/session?session_id=foreign_001&messages=0&resolve_model=0")
+    with patch("api.routes._get_active_profile_name", return_value="default"), \
+         patch("api.routes.get_session", return_value=_ProfileScopedSession()), \
+         patch("api.routes.bad", side_effect=fake_bad), \
+         patch("api.routes.j", side_effect=fake_j):
+        routes.handle_get(SimpleNamespace(headers={"Cookie": "hermes_profile=default"}), parsed)
+
+    assert captured.get("bad", {}).get("status") == 404
+    assert "json" not in captured, "foreign-profile metadata must not be returned"
 
 
 def test_get_session_rejects_cli_session_from_inactive_profile():
@@ -294,7 +319,7 @@ def test_get_session_rejects_cli_session_from_inactive_profile():
          patch("api.routes.get_cli_session_messages", return_value=[{"role": "user", "content": "foreign profile secret"}]), \
          patch("api.routes.bad", side_effect=fake_bad), \
          patch("api.routes.j", side_effect=fake_j):
-        routes.handle_get(SimpleNamespace(), parsed)
+        routes.handle_get(SimpleNamespace(headers={"Cookie": "hermes_profile=default"}), parsed)
 
     assert captured.get("bad", {}).get("status") == 404
     assert "json" not in captured, "foreign-profile CLI transcript must not be returned"

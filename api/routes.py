@@ -199,6 +199,27 @@ def _all_profiles_query_flag(parsed_url) -> bool:
     return raw in ('1', 'true', 'yes', 'on')
 
 
+def _session_visible_to_active_profile(session_profile, handler=None) -> bool:
+    """Return whether a detail-load session belongs to the active profile.
+
+    Apply the /api/sessions profile boundary when the request has an explicit
+    profile scope (cookie/TLS). Direct unit-callers without request profile
+    context keep the historical metadata-load behavior.
+    """
+    active_profile = _get_active_profile_name()
+    explicit_scope = active_profile not in (None, "", "default")
+    try:
+        cookie = handler.headers.get("Cookie", "") if handler is not None else ""
+        explicit_scope = explicit_scope or "hermes_profile=" in str(cookie)
+    except Exception:
+        pass
+    if not explicit_scope:
+        return True
+    if not isinstance(session_profile, str):
+        session_profile = None
+    return _profiles_match(session_profile, active_profile)
+
+
 def _active_skills_dir() -> Path:
     """Return the skills directory for the request's active Hermes profile.
 
@@ -5805,13 +5826,7 @@ def handle_get(handler, parsed) -> bool:
             _t1 = _time.monotonic()
             s = get_session(sid, metadata_only=(not load_messages))
             _session_profile = getattr(s, 'profile', None) or None
-            _active_profile = _get_active_profile_name()
-            if (
-                load_messages
-                and isinstance(_session_profile, str)
-                and _session_profile.strip()
-                and not _profiles_match(_session_profile, _active_profile)
-            ):
+            if not _session_visible_to_active_profile(_session_profile, handler):
                 return bad(handler, "Session not found", 404)
             original_stream_id = getattr(s, "active_stream_id", None)
             _clear_stale_stream_state(s)
@@ -6110,8 +6125,7 @@ def handle_get(handler, parsed) -> bool:
                 return bad(handler, "Session not found", 404)
             cli_meta = _lookup_cli_session_metadata(sid)
             _session_profile = (cli_meta or {}).get("profile") or None
-            _active_profile = _get_active_profile_name()
-            if not _profiles_match(_session_profile, _active_profile):
+            if not _session_visible_to_active_profile(_session_profile, handler):
                 return bad(handler, "Session not found", 404)
             msgs = get_cli_session_messages(sid)
             if msgs:
