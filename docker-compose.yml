@@ -39,6 +39,11 @@ services:
       # Where to store sessions, workspaces, and other state (default: ~/.hermes/webui)
       - HERMES_WEBUI_STATE_DIR=/home/hermeswebui/.hermes/webui
       - HERMES_WEBUI_AGENT_DIR=/home/hermeswebui/.hermes/hermes-agent
+      # When running as root (UID=0) HOME defaults to /root, so the in-process
+      # agent would look for config/credentials in /root/.hermes. Pin HOME and
+      # HERMES_HOME to the shared mount so provider config + .env are found.
+      - HOME=/home/hermeswebui
+      - HERMES_HOME=/home/hermeswebui/.hermes
       # Default workspace directory shown on first launch
 #      - HERMES_WEBUI_DEFAULT_WORKSPACE=/workspace
       # Optional: set a password for remote access
