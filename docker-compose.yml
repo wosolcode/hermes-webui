@@ -15,9 +15,7 @@ services:
   hermes-webui:
     build: .
     ports:
-    # select only one; use 127.0.0.1 version to expose to localhost only
-      - "127.0.0.1:8787:8787"
-#      - "8787:8787"
+      - "8787:8787"
     volumes:
       # Mount your Hermes home directory into the container.
       # The default (${HOME}/.hermes) works on both macOS (/Users/<you>/.hermes)
@@ -40,10 +38,11 @@ services:
       - HERMES_WEBUI_PORT=8787
       # Where to store sessions, workspaces, and other state (default: ~/.hermes/webui)
       - HERMES_WEBUI_STATE_DIR=/home/hermeswebui/.hermes/webui
+      - HERMES_WEBUI_AGENT_DIR=/home/hermeswebui/.hermes/hermes-agent
       # Default workspace directory shown on first launch
 #      - HERMES_WEBUI_DEFAULT_WORKSPACE=/workspace
       # Optional: set a password for remote access
-      # - HERMES_WEBUI_PASSWORD=your-secret-password
+      - HERMES_WEBUI_PASSWORD=${HERMES_WEBUI_PASSWORD}
       #
       # Bind-mount permission handling (fixes #1389, #1399):
       #   When you mount an EXISTING ~/.hermes directory (the common case),
@@ -55,3 +54,10 @@ services:
       # - HERMES_SKIP_CHMOD=1
       # - HERMES_HOME_MODE=0640
     restart: unless-stopped
+    networks:
+      - hermes-net
+
+networks:
+  hermes-net:
+    external: true
+    name: hermes-agent-avxb_default

@@ -485,6 +485,24 @@ fi
 
 ensure_hindsight_client_docker_dependency
 
+# Ensure hermes-agent is installed in editable mode on every startup.
+# This runs outside the .deps_installed guard so AIAgent is always importable
+# even after a regular (non-editable) install from docker_init.bash first run.
+_editable_agent_src=""
+for _ep in "/home/hermeswebui/.hermes/hermes-agent" "/opt/hermes"; do
+    if [ -d "$_ep" ] && [ -f "$_ep/pyproject.toml" ]; then
+        _editable_agent_src="$_ep"
+        break
+    fi
+done
+if [ -n "$_editable_agent_src" ]; then
+    echo ""; echo "-- Ensuring hermes-agent editable install (required for AIAgent)..."
+    uv pip install -e "$_editable_agent_src" -q \
+        --trusted-host pypi.org --trusted-host files.pythonhosted.org || \
+        echo "!! WARNING: editable install failed -- AIAgent may be unavailable"
+fi
+
+
 echo ""; echo "== Running hermes-webui"
 cd /app; python server.py || error_exit "hermes-webui failed or exited with an error"
 
